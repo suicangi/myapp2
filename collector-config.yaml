@@ -1,0 +1,78 @@
+receivers:
+  # Data sources: metrics
+  hostmetrics:
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+      load:
+      memory:
+      network:
+      process:
+      processes:
+      paging:
+
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"  # Optional
+      http:
+        endpoint: "0.0.0.0:4318"  # HTTP receiver
+        cors:
+          allowed_origins:
+              - http://*
+              - https://*
+              
+
+  filelog:
+      include: [ /conf/combined.log ]
+      operators:
+        - type: json_parser
+          timestamp:
+            parse_from: attributes.created
+            layout: ‘%Y-%m-%d %H:%M:%S’
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: customserver
+          scrape_interval: 5s
+          static_configs:
+            - targets: [host.docker.internal:9090]
+              labels:
+                service: custom-server
+                group: application
+
+exporters:
+  otlphttp:
+    endpoint: <OTLP Endpoint>
+    headers:
+      Authorization: "Basic <Token>"
+
+extensions:
+  basicauth/otlp:
+    client_auth:
+      username: <Grafana Username>
+      password: <Grafana Password>
+
+processors:
+  batch:
+
+service:
+  extensions: [basicauth/otlp]
+  telemetry:
+    logs:
+      level: debug
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      exporters: [otlphttp]  # Sends metrics to Grafana by OTLP HTTP
+      processors: [batch]
+    traces:
+      receivers: [otlp]
+      exporters: [otlphttp]  # Sends traces to Grafana by OTLP HTTP
+      processors: [batch]
+    logs:
+      receivers: [filelog]
+      processors: [batch]
+      exporters: [otlphttp]  
